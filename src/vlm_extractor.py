@@ -1,5 +1,5 @@
 """
-VisionFlow AI — vlm_extractor.py
+Flowchart to Editable Diagram — vlm_extractor.py
 Vision-LLM extractor — primary node/edge detector.
 
 Talks to a local Ollama server (default http://localhost:11434) using a

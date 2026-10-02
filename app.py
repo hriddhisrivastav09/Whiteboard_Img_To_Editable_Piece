@@ -1,5 +1,5 @@
 """
-VisionFlow AI — Streamlit UI (Workflow Diagram Analyzer engine V5.1)
+Flowchart to Editable Diagram — Streamlit UI (Workflow Diagram Analyzer engine V5.1)
 
 - Upload a diagram
 - Real-time progress bar
@@ -58,7 +58,7 @@ def render_table(rows: list) -> None:
 
 
 st.set_page_config(
-    page_title="VisionFlow AI",
+    page_title="Flowchart to Editable Diagram",
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -113,7 +113,7 @@ if "editable_graph" not in st.session_state:
 st.markdown(
     """
     <div class="hero">
-        <h1 style="margin:0; font-size:2rem;">🧭 VisionFlow AI <span class="pill">V5.1</span></h1>
+        <h1 style="margin:0; font-size:2rem;">🧭 Flowchart to Editable Diagram <span class="pill">V5.1</span></h1>
         <p style="margin:0.45rem 0 0 0; color:#dbeafe; font-size:1.03rem;">
             Local-first pipeline — <b>OpenCV + OCR + local Ollama</b>. Accurate edge detection. Excel + JSON + annotated PNG downloads.
         </p>

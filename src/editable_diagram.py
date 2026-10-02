@@ -1,5 +1,5 @@
 """
-Editable diagram module for VisionFlow AI.
+Editable diagram module for Flowchart to Editable Diagram.
 
 Converts detection pipeline output into a NetworkX DiGraph and renders it
 via Graphviz DOT format, supporting interactive node/edge editing and exports.
@@ -92,7 +92,7 @@ def render_digraph_to_graphviz(
     """
     Render a NetworkX DiGraph to Graphviz DOT format and return a graphviz.Digraph object.
     """
-    dot = graphviz.Digraph(name=graph_name, comment="VisionFlow Editable Diagram")
+    dot = graphviz.Digraph(name=graph_name, comment="Flowchart to Editable Diagram")
     dot.attr(
         rankdir="TB",
         splines="ortho",

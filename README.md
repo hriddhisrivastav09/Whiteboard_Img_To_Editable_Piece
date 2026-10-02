@@ -1,6 +1,6 @@
-# VisionFlow AI 🧭
+# Flowchart to Editable Diagram 🧭
 
-**VisionFlow AI** is a Streamlit app that turns an image of a workflow / flowchart diagram into structured, editable data — nodes, edges, and a clean summary — with no hardcoded outputs. Everything is derived directly from the uploaded pixels, using a hybrid **Vision-LLM + classical computer vision** pipeline.
+**Flowchart to Editable Diagram** is a Streamlit app that turns an image of a workflow / flowchart diagram into structured, editable data — nodes, edges, and a clean summary — with no hardcoded outputs. Everything is derived directly from the uploaded pixels, using a hybrid **Vision-LLM + classical computer vision** pipeline.
 
 > Engine version: **Workflow Diagram Analyzer V5.1**
 
@@ -60,7 +60,7 @@ The pipeline (`src/pipeline.py`) runs as a sequence of stages, each reporting pr
 ## Project Structure
 
 ```
-VisionFlow AI/
+Flowchart to Editable Diagram/
 ├── app.py                   # Streamlit UI: upload, progress bar, previews, exports
 ├── requirements.txt         # Python dependencies
 ├── run_app.bat               # One-click venv setup + launch (Windows)
@@ -85,7 +85,7 @@ VisionFlow AI/
 ## Project Structure
 
 ```
-VisionFlow AI/
+Flowchart to Editable Diagram/
 ├── app.py                  # Streamlit UI entry point
 ├── requirements.txt        # Python dependencies
 ├── run_app.bat             # One-click setup + launch (Windows)
@@ -156,7 +156,7 @@ The app will open in your browser at `http://localhost:8501`.
 
 ### Optional: Enable VLM Detection + LLM Cleanup
 
-VisionFlow AI can use a local vision-language model (through Ollama) for much more robust detection on diagram styles it hasn't been hand-tuned for, plus an optional text model for cleanup/summaries.
+Flowchart to Editable Diagram can use a local vision-language model (through Ollama) for much more robust detection on diagram styles it hasn't been hand-tuned for, plus an optional text model for cleanup/summaries.
 
 1. Install [Ollama](https://ollama.com)
 2. Pull a vision model (choose based on your hardware):

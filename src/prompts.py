@@ -1,5 +1,5 @@
 """
-VisionFlow AI — prompts.py
+Flowchart to Editable Diagram — prompts.py
 Prompt templates for the local Ollama models.
 
 Two use cases now live here:
@@ -17,7 +17,7 @@ def build_vlm_extraction_prompt() -> str:
     Llama-Vision, via Ollama). No prose, no markdown — just the schema below,
     with bounding boxes expressed as percentages of image width/height so the
     prompt stays resolution-independent."""
-    return """You are the vision-extraction engine for VisionFlow AI, a precise computer-vision
+    return """You are the vision-extraction engine for Flowchart to Editable Diagram, a precise computer-vision
 tool for workflow / flowchart diagrams.
 
 Look at the image and identify every node (box/shape with text) and every
