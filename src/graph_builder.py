@@ -41,7 +41,10 @@ _TERMINAL_KEYWORDS = {
 
 
 def _label_looks_terminal(label: str) -> bool:
-    words = set(label.lower().split())
+    # Split on whitespace AND common separators so "Closed-Rejected" or
+    # "Done/Complete" still match individual keywords.
+    import re as _re
+    words = set(_re.split(r'[\s\-_/,;|]+', label.lower()))
     return bool(words & _TERMINAL_KEYWORDS)
 
 
@@ -121,8 +124,11 @@ def infer_start_end(
             if nd.get("style") == "green" and nid not in starts:
                 if g.in_degree(nid) > 0 and _all_incoming_are_cycle_backs(g, nid):
                     starts.add(nid)
-                    ends_local = set(topo_ends)
-                    ends_local.discard(nid)   # remove from ends if wrongly there
+                    # Remove from ends if it was classified as one (a genuine
+                    # cycle-back start should not also appear as an end state).
+                    ends_set = set(topo_ends)
+                    ends_set.discard(nid)
+                    topo_ends = list(ends_set)
 
     # ── end inference ─────────────────────────────────────────────────────────
     # Step 1: base ends from topology
@@ -171,15 +177,22 @@ def find_cycles(g: nx.DiGraph) -> List[List[str]]:
 
 def find_suspect_boundary_nodes(g: nx.DiGraph, max_gap_px: float = 140.0) -> List[str]:
     """Flag start/end nodes that are geometrically close to another node but
-    have no edge to it — a warning that an edge might be missing."""
+    have no edge to it — a warning that an edge might be missing.
+
+    FIX: added a `seen` set so a node is only appended once even if multiple
+    unconnected neighbours are found within the gap radius.
+    """
     import math
 
     starts = {n for n, d in g.in_degree()  if d == 0}
     ends   = {n for n, d in g.out_degree() if d == 0}
     boundary = starts | ends
     suspects: List[str] = []
+    seen: set = set()
     nodes = list(g.nodes(data=True))
     for nid in boundary:
+        if nid in seen:
+            continue
         data  = g.nodes[nid]
         center = data.get("center")
         if not center:
@@ -193,6 +206,7 @@ def find_suspect_boundary_nodes(g: nx.DiGraph, max_gap_px: float = 140.0) -> Lis
             dist = math.hypot(center[0] - oc[0], center[1] - oc[1])
             if dist < max_gap_px and not g.has_edge(nid, other_id) and not g.has_edge(other_id, nid):
                 suspects.append(nid)
+                seen.add(nid)
                 break
     return suspects
 
@@ -201,12 +215,30 @@ def aggregate_confidence(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]
     if not nodes:
         return 0.0
     node_avg = sum(n.get("confidence", 0.0) for n in nodes) / len(nodes)
-    edge_avg = (sum(e.get("confidence", 0.0) for e in edges) / len(edges)) if edges else 0.5
+    # When there are no edges detected, edge confidence should contribute 0.0
+    # (detection failed), NOT 0.5 (which would artificially inflate the score).
+    edge_avg = (sum(e.get("confidence", 0.0) for e in edges) / len(edges)) if edges else 0.0
+    # Weight: 60% nodes, 40% edges.  When edges=0 the formula collapses to
+    # 0.6 * node_avg, which is intentionally conservative.
     return round(0.6 * node_avg + 0.4 * edge_avg, 3)
 
 
-def statistics(nodes, edges, g) -> Dict[str, Any]:
-    starts, ends = infer_start_end(g, nodes)
+def statistics(
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, Any]],
+    g: nx.DiGraph,
+    starts: Optional[List[str]] = None,
+    ends: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Compute diagram statistics.
+
+    *starts* and *ends* may be passed in from the pipeline (already computed
+    by infer_start_end) to avoid running the inference a second time.  When
+    omitted they are computed here — preserving backwards compatibility for
+    callers that don't supply them.
+    """
+    if starts is None or ends is None:
+        starts, ends = infer_start_end(g, nodes)
     return {
         "node_count":            len(nodes),
         "edge_count":            len(edges),

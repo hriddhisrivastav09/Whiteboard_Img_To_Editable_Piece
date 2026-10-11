@@ -83,10 +83,15 @@ def export_to_bytes(result: Dict[str, Any]) -> bytes:
     ws4 = wb.create_sheet("Summary")
     ws4.append(["Field", "Value"])
     ws4.append(["Summary", result.get("summary", "")])
-    starts = ", ".join(result.get("start_states", []))
-    ends = ", ".join(result.get("end_states", []))
+    # Resolve node IDs to human-readable "ID · Label" strings
+    id2label = {n["id"]: n.get("label", "") for n in result.get("nodes", [])}
+    def _id_to_display(nid: str) -> str:
+        lbl = id2label.get(nid, "")
+        return f"{nid} · {lbl}" if lbl else nid
+    starts = ", ".join(_id_to_display(s) for s in result.get("start_states", []))
+    ends   = ", ".join(_id_to_display(e) for e in result.get("end_states",   []))
     ws4.append(["Start States", starts])
-    ws4.append(["End States", ends])
+    ws4.append(["End States",   ends])
     for i, obs in enumerate(result.get("observations", []), start=1):
         ws4.append([f"Observation {i}", obs])
     _style_header(ws4, 2); _autosize(ws4)

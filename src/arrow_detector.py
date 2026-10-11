@@ -36,16 +36,24 @@ def _mask_out_nodes(gray: np.ndarray, nodes: List[Dict[str, Any]], pad: int = 4)
     sits just outside the bbox. Without padding a sliver of that border
     remains, creating spurious blobs right where every connector meets
     the node.
+
+    FIX: use the median brightness of the image as the fill colour instead
+    of hardcoded 255 (white). On dark-background diagrams painting white
+    over node regions creates bright blobs that Canny detects as edges,
+    producing phantom connectors. Using the background tone is neutral.
     """
     m = gray.copy()
     H, W = m.shape[:2]
+    # Estimate background brightness from image median — robust to partial
+    # node coverage regardless of light or dark themes.
+    bg_color = int(np.median(m))
     for n in nodes:
         x1, y1, x2, y2 = n["bbox"]
         cv2.rectangle(
             m,
             (max(0, x1 - pad), max(0, y1 - pad)),
             (min(W, x2 + pad), min(H, y2 + pad)),
-            255, thickness=-1,
+            bg_color, thickness=-1,
         )
     return m
 
@@ -269,17 +277,33 @@ def _path_passes_third_node(path, src_id, tgt_id, nodes, margin: float = 4.0) ->
 # ── arrowhead detection ───────────────────────────────────────────────────────
 
 def _detect_arrowheads(gray_masked: np.ndarray, cfg=None) -> List[Tuple[int, int]]:
-    """Find small solid triangular arrowhead blobs using Canny edges."""
+    """Find small solid triangular arrowhead blobs using Canny edges.
+
+    FIX: the original fixed area filter (6..650 px²) was too small for
+    high-resolution images (1800 px+), causing missed arrowheads and lower
+    edge confidence scores.  Scale the upper bound with the image diagonal
+    so arrowheads are found reliably across resolutions.
+    """
     canny_low  = getattr(cfg, "canny_low",  40) if cfg is not None else 40
     canny_high = getattr(cfg, "canny_high", 140) if cfg is not None else 140
     edges = cv2.Canny(gray_masked, canny_low, canny_high, apertureSize=3)
     bw = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
     bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, np.ones((4, 4), np.uint8), iterations=1)
     contours, _ = cv2.findContours(bw, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    H, W = gray_masked.shape[:2]
+    diag = math.hypot(H, W)
+    # Scale arrowhead area limits with image size.
+    # Baseline: 1280-px diagonal (1000×800) → upper ~650 px².
+    # At 1800-px diagonal the cap grows proportionally (~1280 px²).
+    scale = (diag / 1280.0) ** 2
+    min_area = max(4, int(6 * scale))
+    max_area = int(650 * scale)
+
     tips: List[Tuple[int, int]] = []
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area < 6 or area > 650:
+        if area < min_area or area > max_area:
             continue
         peri = cv2.arcLength(cnt, True)
         if peri <= 0:
@@ -387,7 +411,7 @@ def detect_edges(gray, nodes, cfg):
     H, W = gray.shape[:2]
     diag = math.hypot(H, W)
     max_dist = cfg.max_edge_distance_ratio * diag
-    max_path_px = int(cfg.max_edge_distance_ratio * diag * 2.2)  # V5.1: 2.5 was too generous → 2.2
+    max_path_px = int(cfg.max_edge_distance_ratio * diag * getattr(cfg, "max_path_tortuosity_factor", 2.2))
 
     masked = _mask_out_nodes(gray, nodes)
     segs = _segments(masked, cfg)

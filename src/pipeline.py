@@ -90,6 +90,12 @@ class DiagramPipeline:
                     step(35, "Snapping VLM boxes to pixel-accurate contours...")
                     nodes = vlm_extractor.snap_boxes_to_cv(nodes, bgr, pre["binary"], self.config)
 
+                # snap_boxes_to_cv has now consumed (or not needed) _vlm_confidence.
+                # Strip it here so downstream code (graph_builder, Excel export, etc.)
+                # never sees the internal key regardless of whether snapping ran.
+                for _n in nodes:
+                    _n.pop("_vlm_confidence", None)
+
                 # A connected workflow needs at least (nodes - 1) edges. If the
                 # VLM returned noticeably fewer than that, it likely missed some
                 # (busy diagrams with crossing/converging arrows are hard for a
@@ -98,7 +104,7 @@ class DiagramPipeline:
                 min_expected_edges = max(0, len(nodes) - 1)
                 if len(edges) < min_expected_edges and len(nodes) >= 2:
                     step(60, "Few edges from VLM — supplementing with classical arrow tracer...")
-                    classical_edges = detect_edges(pre["clahe"], nodes, self.config)
+                    classical_edges = detect_edges(pre["deskewed"], nodes, self.config)
                     seen_pairs = {(e["source"], e["target"]) for e in edges}
                     for ce in classical_edges:
                         pair = (ce["source"], ce["target"])
@@ -113,12 +119,15 @@ class DiagramPipeline:
         # ── Classical CV fallback ────────────────────────────────────────
         if not nodes:
             step(25, f"Running OCR ({self.ocr.engine_name})...")
-            ocr_items = self.ocr.read(pre["clahe"])
+            # Use the sharpened + deskewed image so OCR and CV benefit from
+            # all preprocessing steps (not just CLAHE).
+            ocr_image = pre["deskewed"]
+            ocr_items = self.ocr.read(ocr_image)
 
             step(45, "Detecting nodes (OCR + color borders + contour merge)...")
             nodes = detect_nodes(
                 color_bgr=bgr,
-                gray=pre["clahe"],
+                gray=ocr_image,
                 binary=pre["binary"],
                 ocr_items=ocr_items,
                 ocr_engine=self.ocr,
@@ -126,7 +135,7 @@ class DiagramPipeline:
             )
 
             step(68, "Detecting arrows (skeleton tracing + coverage scoring)...")
-            edges = detect_edges(pre["clahe"], nodes, self.config)
+            edges = detect_edges(ocr_image, nodes, self.config)
 
         step(80, "Building directed graph...")
         g = build_graph(nodes, edges)
@@ -134,7 +143,8 @@ class DiagramPipeline:
         # FIX V5.1: pass nodes so infer_start_end can use color hints
         starts, ends = infer_start_end(g, nodes)
 
-        stats = statistics(nodes, edges, g)
+        # Pass starts/ends to statistics() so inference runs only once per analysis
+        stats = statistics(nodes, edges, g, starts=starts, ends=ends)
 
         uncertainties: List[str] = []
         if detection_method == "classical_cv":
@@ -170,9 +180,13 @@ class DiagramPipeline:
                 timeout=self.config.ollama_timeout,
             )
             step(92, "LLM summary generation...")
+            # Pass the rule-based fallback so the UI never shows an empty
+            # summary when the LLM is reachable but returns unparseable JSON.
+            fallback = self._fallback_summary(nodes, edges, stats)
             summary_data = llm_cleanup.summarize(
                 self.config.ollama_host, self.config.text_model, nodes, edges, stats,
                 timeout=self.config.ollama_timeout,
+                fallback_summary=fallback,
             )
         else:
             summary_data["summary"] = self._fallback_summary(nodes, edges, stats)

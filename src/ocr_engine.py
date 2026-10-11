@@ -71,10 +71,18 @@ class OCREngine:
 
     def _clean_text(self, text: str) -> str:
         text = (text or "").replace("\u2014", "-").replace("\u2013", "-")
-        text = re.sub(r"^[^A-Za-z0-9]+", "", text)
+        # Strip leading non-alphanumeric chars, but preserve a leading "("
+        # if there is a matching ")" later — "(New)" should stay intact.
+        text = re.sub(r"^[^A-Za-z0-9(]+", "", text)
         text = re.sub(r"\s+", " ", text).strip()
-        # Strip small leading OCR garbage like "w?" or "v!"
-        text = re.sub(r"^(?:[A-Za-z]?[^A-Za-z0-9\s-]{1,3}\s+)+", "", text).strip()
+        # Strip small leading OCR garbage like "w?" or "v!" (1-2 char prefix + junk)
+        text = re.sub(r"^(?:[A-Za-z]?[^A-Za-z0-9\s\-(]{1,3}\s+)+", "", text).strip()
+        # Balance parentheses: if the text starts with "(" but has no matching
+        # ")", strip the lone "("; if it ends with ")" but has no opening "(", strip it.
+        if text.startswith("(") and ")" not in text:
+            text = text[1:].lstrip()
+        if text.endswith(")") and "(" not in text:
+            text = text[:-1].rstrip()
         return text
 
     def _read_easyocr(self, image: np.ndarray) -> List[Dict[str, Any]]:

@@ -43,9 +43,15 @@ def _contain(a: List[int], b: List[int]) -> float:
 
 def _clean_label(text: str) -> str:
     text = (text or "").replace("\u2014", "-").replace("\u2013", "-")
-    text = re.sub(r"^[^A-Za-z0-9]+", "", text)
+    # Preserve leading "(" only when there is a matching ")" — "(New)" stays intact.
+    text = re.sub(r"^[^A-Za-z0-9(]+", "", text)
     text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"^(?:[a-zA-Z]{0,2}[^A-Za-z0-9\s-]{1,3}\s+)+", "", text).strip()
+    text = re.sub(r"^(?:[a-zA-Z]{0,2}[^A-Za-z0-9\s\-(]{1,3}\s+)+", "", text).strip()
+    # Balance lone parentheses introduced by OCR noise
+    if text.startswith("(") and ")" not in text:
+        text = text[1:].lstrip()
+    if text.endswith(")") and "(" not in text:
+        text = text[:-1].rstrip()
     return text
 
 
@@ -93,7 +99,7 @@ def color_candidates(color_bgr: np.ndarray, cfg) -> List[Dict[str, Any]]:
         if w > cfg.max_node_width or h > max(cfg.max_node_height + 30, 80):
             continue
         ar = w / max(h, 1)
-        if ar < 1.2 or ar > cfg.max_node_aspect:
+        if ar < cfg.min_node_aspect or ar > cfg.max_node_aspect:
             continue
         cands.append({
             "bbox": [int(x), int(y), int(x + w), int(y + h)],
@@ -119,7 +125,7 @@ def contour_candidates(binary: np.ndarray, cfg) -> List[Dict[str, Any]]:
             continue
         if w < cfg.min_node_width or h < cfg.min_node_height:
             continue
-        if w > cfg.max_node_width or h > cfg.max_node_height:
+        if w > cfg.max_node_width or h > max(cfg.max_node_height, 120):
             continue
         ar = w / max(h, 1)
         if ar < cfg.min_node_aspect or ar > cfg.max_node_aspect:

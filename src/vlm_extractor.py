@@ -341,10 +341,22 @@ def _percent_bbox_to_px(bbox_pct: Any, width: int, height: int) -> Optional[List
     w_pct = _clamp(w_pct, 0.1, 100)
     h_pct = _clamp(h_pct, 0.1, 100)
 
-    x1 = int(round((x_pct / 100.0) * width))
-    y1 = int(round((y_pct / 100.0) * height))
-    x2 = int(round(((x_pct + w_pct) / 100.0) * width))
-    y2 = int(round(((y_pct + h_pct) / 100.0) * height))
+    # Detect when the model returned [x1, y1, x2, y2] as absolute-corner
+    # percentages instead of the requested [x, y, width, height] format.
+    # Heuristic: if w_pct > x_pct (i.e. the "width" value is larger than the
+    # "x" value and also > 50%) it is almost certainly x2, not a width.
+    # In that case reinterpret as absolute corners.
+    if w_pct > x_pct and w_pct > 50 and h_pct > y_pct and h_pct > 50:
+        # Treat as [x1%, y1%, x2%, y2%]
+        x1 = int(round((x_pct / 100.0) * width))
+        y1 = int(round((y_pct / 100.0) * height))
+        x2 = int(round((w_pct / 100.0) * width))
+        y2 = int(round((h_pct / 100.0) * height))
+    else:
+        x1 = int(round((x_pct / 100.0) * width))
+        y1 = int(round((y_pct / 100.0) * height))
+        x2 = int(round(((x_pct + w_pct) / 100.0) * width))
+        y2 = int(round(((y_pct + h_pct) / 100.0) * height))
 
     x1 = int(_clamp(x1, 0, width - 1))
     y1 = int(_clamp(y1, 0, height - 1))
@@ -468,7 +480,7 @@ def _match_label_to_node(
         score = _label_similarity(query, n["label"])
         if score > best_score:
             best_score, best_id = score, n["id"]
-    if best_id is not None and best_score >= 0.55:
+    if best_id is not None and best_score >= 0.70:
         return best_id
     return None
 
@@ -583,8 +595,11 @@ def extract_diagram(host: str, model: str, image: np.ndarray, timeout: int = 180
 
     edges = _edges_from_vlm(raw_edges, nodes)
 
-    for n in nodes:
-        n.pop("_vlm_confidence", None)
+    # NOTE: _vlm_confidence is intentionally NOT stripped here.
+    # pipeline.py calls snap_boxes_to_cv() after extract_diagram() returns,
+    # and snap_boxes_to_cv needs the raw VLM confidence for correct blending.
+    # pipeline.py is responsible for stripping _vlm_confidence once snapping
+    # is complete (or if snapping is disabled).
 
     return {"nodes": nodes, "edges": edges}
 

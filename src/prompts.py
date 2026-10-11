@@ -33,6 +33,8 @@ for each node/edge):
 
 Rules:
 - "bbox" is [x, y, width, height] as PERCENTAGES of the full image (0-100 floats), where x,y is the top-left corner of the node's box.
+  Example: a node whose top-left is at 10% from the left, 25% from the top, and spans 30% wide and 12% tall → "bbox":[10.0,25.0,30.0,12.0]
+  IMPORTANT: the third value is WIDTH (not x2/right-edge) and the fourth is HEIGHT (not y2/bottom-edge).
 - "label" is the visible text inside the node, verbatim.
 - "shape" is one of: rectangle, rounded_rectangle, diamond, ellipse, circle, parallelogram.
 - "style" is the dominant fill/border color of the node in plain words (e.g. green, blue, red, yellow, gray, white, none).

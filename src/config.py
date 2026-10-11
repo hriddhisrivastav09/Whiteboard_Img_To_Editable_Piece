@@ -49,7 +49,7 @@ class PipelineConfig:
     min_node_width: int = 60
     min_node_height: int = 18
     max_node_width: int = 480
-    max_node_height: int = 55
+    max_node_height: int = 120   # raised from 55: tall diamonds/multi-line nodes were silently dropped
     max_node_aspect: float = 14.0
     min_node_aspect: float = 1.4
     overlap_iou_threshold: float = 0.50
@@ -76,6 +76,10 @@ class PipelineConfig:
     connector_ring_px: int = 16              # V4: 24 → tightened: stop false shared-component hits
     require_arrowhead_or_shared_component: bool = True
     max_edges_per_node: int = 10             # V4: 14 → moderate; hub nodes rarely need >10 in this style
+    # BFS path-length cap = max_edge_distance_ratio * diag * max_path_tortuosity_factor.
+    # A factor of 2.2 allows moderately curved connectors (tortuosity ~2×) while
+    # rejecting extreme zigzag paths that are almost certainly phantoms.
+    max_path_tortuosity_factor: float = 2.2
 
     # ── LLM ───────────────────────────────────────────────────────────────────
     use_text_cleanup: bool = True

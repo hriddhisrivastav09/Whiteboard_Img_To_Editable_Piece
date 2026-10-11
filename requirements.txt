@@ -9,3 +9,5 @@ torchvision>=0.18.1
 openpyxl>=3.1.2
 networkx>=3.2
 scikit-image>=0.22.0
+graphviz>=0.20.1
+rapidfuzz>=3.0.0

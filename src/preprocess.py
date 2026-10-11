@@ -39,16 +39,26 @@ def sharpen(gray: np.ndarray) -> np.ndarray:
 
 
 def deskew(gray: np.ndarray) -> Tuple[np.ndarray, float]:
-    """Estimate skew from text-heavy regions and correct it."""
+    """Estimate skew from text-heavy regions and correct it.
+
+    BUG FIX: np.where() returns (rows, cols) i.e. (y, x), but
+    cv2.minAreaRect() expects points as (x, y).  We swap the columns so
+    the rectangle is fitted in the correct coordinate space.
+    """
     thr = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-    coords = np.column_stack(np.where(thr > 0))
-    if coords.size == 0:
+    ys, xs = np.where(thr > 0)
+    if xs.size == 0:
         return gray, 0.0
+    # Stack as (x, y) — correct order for cv2.minAreaRect
+    coords = np.column_stack((xs, ys)).astype(np.float32)
     angle = cv2.minAreaRect(coords)[-1]
+    # OpenCV returns angles in (-90, 0]; normalise to a small skew value
     if angle < -45:
-        angle = -(90 + angle)
+        angle = 90 + angle
     else:
-        angle = -angle
+        angle = angle         # already negative-small or near 0
+    # Invert sign: a negative rect angle means we need to rotate counter-clockwise
+    angle = -angle
     if abs(angle) < 0.4:
         return gray, 0.0
     (h, w) = gray.shape[:2]

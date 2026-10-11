@@ -33,21 +33,86 @@ def _ollama_generate(host: str, model: str, prompt: str, timeout: int = 120) -> 
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
+    """Robust JSON extraction that handles code fences, trailing commas,
+    stray escapes, and leading/trailing prose — mirrors the approach in
+    vlm_extractor._safe_json_parse for consistency."""
     if not text:
         return None
-    # try direct
+
+    # 1) Direct parse (fast path for well-behaved output)
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
     except Exception:
         pass
-    # try to find the first {...} block
-    m = re.search(r"\{.*\}", text, flags=re.DOTALL)
-    if not m:
-        return None
+
+    # 2) Strip markdown code fences if present
+    cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
     try:
-        return json.loads(m.group(0))
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
     except Exception:
-        return None
+        pass
+
+    # 3) Fix trailing commas before closing braces/brackets
+    def _remove_trailing_commas(s: str) -> str:
+        return re.sub(r",\s*([}\]])", r"\1", s)
+
+    # 4) Fix stray backslash escapes
+    def _fix_escapes(s: str) -> str:
+        return re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", s)
+
+    for transform in (_remove_trailing_commas, _fix_escapes,
+                      lambda s: _remove_trailing_commas(_fix_escapes(s))):
+        try:
+            parsed = json.loads(transform(cleaned))
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+
+    # 5) Find the largest balanced {...} block in whatever the model returned
+    best: Optional[Dict[str, Any]] = None
+    best_len = 0
+    depth = 0
+    in_str = False
+    esc = False
+    start = -1
+    for i, ch in enumerate(cleaned):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and start != -1:
+                    block = cleaned[start:i + 1]
+                    if len(block) > best_len:
+                        for t in (lambda s: s, _remove_trailing_commas,
+                                  _fix_escapes,
+                                  lambda s: _remove_trailing_commas(_fix_escapes(s))):
+                            try:
+                                p = json.loads(t(block))
+                                if isinstance(p, dict):
+                                    best = p
+                                    best_len = len(block)
+                                    break
+                            except Exception:
+                                pass
+    return best
 
 
 def clean_labels(host: str, model: str, nodes: List[Dict[str, Any]], timeout: int = 120) -> List[Dict[str, Any]]:
@@ -74,14 +139,29 @@ def clean_labels(host: str, model: str, nodes: List[Dict[str, Any]], timeout: in
     return nodes
 
 
-def summarize(host: str, model: str, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]], stats: Dict[str, Any], timeout: int = 120) -> Dict[str, Any]:
+def summarize(
+    host: str,
+    model: str,
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, Any]],
+    stats: Dict[str, Any],
+    timeout: int = 120,
+    fallback_summary: str = "",
+) -> Dict[str, Any]:
+    """Generate an LLM summary.  If the LLM is unreachable or returns
+    unparseable JSON, fall back to *fallback_summary* (a pre-built rule-based
+    string passed in from pipeline.py) so the UI never shows an empty summary.
+    """
     prompt = build_summary_prompt(nodes, edges, stats)
     raw = _ollama_generate(host, model, prompt, timeout=timeout)
     data = _extract_json(raw or "")
     if not data:
-        return {"summary": "", "observations": []}
+        return {
+            "summary": fallback_summary,
+            "observations": [],
+        }
     return {
-        "summary": (data.get("summary") or "").strip(),
+        "summary": (data.get("summary") or fallback_summary).strip(),
         "observations": [o for o in (data.get("observations") or []) if isinstance(o, str)],
     }
 

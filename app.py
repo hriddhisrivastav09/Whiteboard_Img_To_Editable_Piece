@@ -162,7 +162,7 @@ with st.sidebar:
     )
     arrow_threshold = st.slider(
         "Arrow confidence threshold", 0.0, 1.0, _defaults.min_arrow_confidence, 0.02,
-        help="Higher = fewer false arrows. Default 0.46 balances recall and precision."
+        help="Higher = fewer false arrows. Default 0.51 balances recall and precision."
     )
     strict_edges = st.checkbox(
         "Strict edge gate (recommended)",
@@ -263,6 +263,13 @@ with left:
                     )
             except Exception as exc:
                 st.exception(exc)
+            finally:
+                # Clean up the temp file regardless of success or failure
+                try:
+                    import os as _os
+                    _os.remove(temp_path)
+                except Exception:
+                    pass
     st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
@@ -282,7 +289,7 @@ with right:
         c5.metric("Confidence", f"{int(result.get('confidence', 0.0)*100)}%")
 
         tab_labels = ["🖼️ Annotated", "📋 Summary", "📊 Data", "⚠️ Warnings", "⬇️ Download"]
-        tab1, tab2, tab3, tab4, tab6 = st.tabs(tab_labels)
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(tab_labels)
 
         with tab1:
             if st.session_state.annotated_bytes:
@@ -363,7 +370,7 @@ with right:
                 for e in low_edges:
                     st.write(f"- {e['id']} {e['source']} → {e['target']} (conf {e['confidence']})")
 
-        with tab6:
+        with tab5:
             st.markdown("Download the analysis results below:")
             colA, colB, colC = st.columns(3)
             if st.session_state.excel_bytes:
@@ -405,7 +412,7 @@ with right:
                 dot_obj = render_digraph_to_graphviz(g)
 
                 st.subheader("Interactive Digital Diagram")
-                st.graphviz_chart(dot_obj, use_container_width=True)
+                st.graphviz_chart(dot_obj.source, use_container_width=True)
 
                 st.markdown("---")
                 st.subheader("Diagram Editing & Export Controls")
